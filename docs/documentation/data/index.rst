@@ -51,6 +51,8 @@ Currently, the following data providers are supported:
   statsbomb
   wyscout
   opta
+  impect
+  impect_pipeline
 
 
 Loading data with kloppy

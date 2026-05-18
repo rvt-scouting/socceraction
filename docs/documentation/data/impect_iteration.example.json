@@ -1,0 +1,8 @@
+{
+  "competition_id": 0,
+  "season_id": 0,
+  "competition_name": "Example League",
+  "season_name": "25/26",
+  "country_name": "Example Country",
+  "output_basename": "example-league-2526"
+}

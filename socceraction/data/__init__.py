@@ -4,6 +4,7 @@ __all__ = [
     "opta",
     "statsbomb",
     "wyscout",
+    "impect",
 ]
 
-from . import opta, statsbomb, wyscout
+from . import impect, opta, statsbomb, wyscout

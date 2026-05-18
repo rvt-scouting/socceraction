@@ -63,7 +63,8 @@ works, we refer to `Karun's blog post <https://karun.in/blog/expected-threat.htm
 
 .. seealso::
 
-  This `notebook`__ gives an example of the complete pipeline to train and
-  apply an xT model.
+  - StatsBomb HDF5: `EXTRA-run-xT.ipynb`__
+  - Impect HDF5: `EXTRA-run-xT-impect.ipynb`__
 
 __ https://github.com/ML-KULeuven/socceraction/blob/master/public-notebooks/EXTRA-run-xT.ipynb
+__ https://github.com/ML-KULeuven/socceraction/blob/master/public-notebooks/EXTRA-run-xT-impect.ipynb

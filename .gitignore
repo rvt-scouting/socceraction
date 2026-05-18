@@ -1,5 +1,7 @@
 # folders to ignore
 data-*/*
+data/impect/
+private/
 private-notebooks*
 experiments/
 tests/datasets/*
@@ -124,6 +126,7 @@ target/
 
 # exclude data from source control by default
 *.hdf
+*.h5
 *.clf
 
 # reports
