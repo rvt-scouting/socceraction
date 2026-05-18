@@ -30,7 +30,7 @@ https://user-images.githubusercontent.com/2175271/136857714-1d2c8706-7f2f-449d-8
 
 Socceraction contains the following components:
 
-- A set of API clients for **loading event stream data** from StatsBomb, Opta, Wyscout, Stats Perform and WhoScored as Pandas DataFrames using a unified data model. [Read more »](https://socceraction.readthedocs.io/en/latest/documentation/data/index.html)
+- A set of API clients for **loading event stream data** from StatsBomb, Opta, Wyscout, Stats Perform, WhoScored, and **Impect** as Pandas DataFrames using a unified data model. [Read more »](https://socceraction.readthedocs.io/en/latest/documentation/data/index.html)
 - Converters for each of these provider's proprietary data format to the **SPADL** and **atomic-SPADL** formats, which are unified and expressive languages for on-the-ball player actions. [Read more »](https://socceraction.readthedocs.io/en/latest/documentation/spadl/index.html)
 - An implementation of the **Expected Threat (xT)** possession value framework. [Read more »](https://socceraction.readthedocs.io/en/latest/documentation/valuing_actions/xT.html)
 - An implementation of the **VAEP** and **Atomic-VAEP** possession value frameworks. [Read more »](https://socceraction.readthedocs.io/en/latest/documentation/valuing_actions/vaep.html)
@@ -43,7 +43,20 @@ The recommended way to install `socceraction` is to simply use pip. The latest v
 $ pip install socceraction
 ```
 
-The folder [`public-notebooks`](https://github.com/ML-KULeuven/socceraction/tree/master/public-notebooks) provides a demo of the full pipeline from raw StatsBomb event stream data to action values and player ratings. More detailed installation/usage instructions can be found in the [Documentation](https://socceraction.readthedocs.io/en/latest/).
+The folder [`public-notebooks`](https://github.com/ML-KULeuven/socceraction/tree/master/public-notebooks) provides demos of the full pipeline from raw event stream data to action values and player ratings (StatsBomb, Wyscout, Opta, and Impect). More detailed installation/usage instructions can be found in the [Documentation](https://socceraction.readthedocs.io/en/latest/).
+
+### Impect support
+
+This fork extends socceraction with an **Impect** data provider and SPADL converter:
+
+- **Loader** — `socceraction.data.impect.ImpectLoader` for the Impect Customer API and local JSON (open-data layout). Install with `pip install socceraction[impect]`.
+- **SPADL** — `socceraction.spadl.impect` converts Impect events to the same SPADL schema as other providers, so VAEP and xT work without extra code.
+- **Notebooks** — `public-notebooks/1-load-and-convert-impect-data.ipynb` through notebook 4 (VAEP), plus `EXTRA-run-xT-impect.ipynb`.
+- **Docs** — [Impect data guide](https://socceraction.readthedocs.io/en/latest/documentation/data/impect.html) and [local production pipeline](https://socceraction.readthedocs.io/en/latest/documentation/data/impect_pipeline.html) (cache, HDF5, VAEP, CSV export).
+
+Heavy batch jobs (full-season cache, VAEP training) are meant to run on your machine or server via scripts under `private/impect-pipeline/`; see the pipeline doc for layout and `.env` credentials.
+
+*Impect integration by Robby Van Thuyne.*
 
 ## Contributing
 
