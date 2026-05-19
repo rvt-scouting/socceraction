@@ -76,6 +76,9 @@ class ImpectLoader(EventDataLoader):
     ``data/events/events_{game_id}.json``, ``data/matches/matches_{iteration_id}.json``,
     ``data/lineups/lineups_{game_id}.json``, and ``iterations.json``.
 
+    Lineup files may use open-data format (``squadHome`` / ``squadAway``) or the API-cache
+    format written by the analytics pipeline (``positions`` / ``substitutions``).
+
     Parameters
     ----------
     getter : str
@@ -323,7 +326,18 @@ class ImpectLoader(EventDataLoader):
             )
             return cast(DataFrame[ImpectTeamSchema], teams)
 
-        lineup = self._load_lineup(game_id)
+        data = self._read_lineup_json(game_id)
+        if "positions" in data:
+            home_id, away_id = self._home_away_squad_ids(game_id)
+            teams = pd.DataFrame(
+                {
+                    "team_id": [home_id, away_id],
+                    "team_name": [str(home_id), str(away_id)],
+                }
+            )
+            return cast(DataFrame[ImpectTeamSchema], teams)
+
+        lineup = self._parse_open_data_lineup(data)
         teams = pd.DataFrame(
             {
                 "team_id": [lineup["home"]["id"], lineup["away"]["id"]],
@@ -344,41 +358,15 @@ class ImpectLoader(EventDataLoader):
             subs = self._call_with_token_retry(  # type: ignore[union-attr]
                 ip.getSubstitutions, matches=[game_id]
             )
-            starter_ids = set(positions["playerId"].astype(int))
-            played_minutes = minutes_from_roster(positions, subs)
-            records = []
-            for row in positions.to_dict(orient="records"):
-                pid = int(row["playerId"])
-                records.append(
-                    {
-                        "game_id": game_id,
-                        "team_id": int(row["squadId"]),
-                        "player_id": pid,
-                        "player_name": row.get("playerName", str(pid)),
-                        "is_starter": True,
-                        "minutes_played": played_minutes.get(pid, 90),
-                        "jersey_number": int(row.get("shirtNumber", 0)),
-                    }
-                )
-            if len(subs) > 0:
-                for row in subs.to_dict(orient="records"):
-                    pid = int(row["playerId"])
-                    if pid in starter_ids:
-                        continue
-                    records.append(
-                        {
-                            "game_id": game_id,
-                            "team_id": int(row["squadId"]),
-                            "player_id": pid,
-                            "player_name": row.get("playerName", str(pid)),
-                            "is_starter": False,
-                            "minutes_played": played_minutes.get(pid, 0),
-                            "jersey_number": int(row.get("shirtNumber", 0)),
-                        }
-                    )
-            return cast(DataFrame[ImpectPlayerSchema], pd.DataFrame(records))
+            return self._players_from_api_roster(game_id, positions, subs)
 
-        lineup = self._load_lineup(game_id)
+        data = self._read_lineup_json(game_id)
+        if "positions" in data:
+            positions = pd.DataFrame(data["positions"])
+            subs = pd.DataFrame(data.get("substitutions") or [])
+            return self._players_from_api_roster(game_id, positions, subs)
+
+        lineup = self._parse_open_data_lineup(data)
         records: list[dict[str, Any]] = []
         for side in ("home", "away"):
             squad = lineup[side]
@@ -398,6 +386,46 @@ class ImpectLoader(EventDataLoader):
                         "is_starter": pid in starter_ids,
                         "minutes_played": 90 if pid in starter_ids else 0,
                         "jersey_number": int(player.get("shirtNumber", 0)),
+                    }
+                )
+        return cast(DataFrame[ImpectPlayerSchema], pd.DataFrame(records))
+
+    def _players_from_api_roster(
+        self, game_id: int, positions: pd.DataFrame, subs: pd.DataFrame
+    ) -> DataFrame[ImpectPlayerSchema]:
+        """Build player rows from Impect API starting positions + substitutions."""
+        if len(positions) == 0:
+            return cast(DataFrame[ImpectPlayerSchema], pd.DataFrame())
+        starter_ids = set(positions["playerId"].astype(int))
+        played_minutes = minutes_from_roster(positions, subs)
+        records: list[dict[str, Any]] = []
+        for row in positions.to_dict(orient="records"):
+            pid = int(row["playerId"])
+            records.append(
+                {
+                    "game_id": game_id,
+                    "team_id": int(row["squadId"]),
+                    "player_id": pid,
+                    "player_name": row.get("playerName", str(pid)),
+                    "is_starter": True,
+                    "minutes_played": played_minutes.get(pid, 90),
+                    "jersey_number": int(row.get("shirtNumber", 0)),
+                }
+            )
+        if len(subs) > 0:
+            for row in subs.to_dict(orient="records"):
+                pid = int(row["playerId"])
+                if pid in starter_ids:
+                    continue
+                records.append(
+                    {
+                        "game_id": game_id,
+                        "team_id": int(row["squadId"]),
+                        "player_id": pid,
+                        "player_name": row.get("playerName", str(pid)),
+                        "is_starter": False,
+                        "minutes_played": played_minutes.get(pid, 0),
+                        "jersey_number": int(row.get("shirtNumber", 0)),
                     }
                 )
         return cast(DataFrame[ImpectPlayerSchema], pd.DataFrame(records))
@@ -432,12 +460,15 @@ class ImpectLoader(EventDataLoader):
             raise MissingDataError(f"Match {game_id} not found in iteration {iteration_id}")
         return match.iloc[0]
 
-    def _load_lineup(self, game_id: int) -> dict[str, Any]:
+    def _read_lineup_json(self, game_id: int) -> dict[str, Any]:
         path = self._data_dir() / "lineups" / f"lineups_{game_id}.json"
         if not path.is_file():
             raise MissingDataError(f"Lineup file not found: {path}")
         with path.open(encoding="utf-8") as fh:
-            data = json.load(fh)
+            return json.load(fh)
+
+    def _parse_open_data_lineup(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Parse Impect open-data lineup JSON (squadHome / squadAway)."""
         return {
             "home": {
                 "id": data["squadHome"]["id"],
@@ -450,3 +481,16 @@ class ImpectLoader(EventDataLoader):
                 "startingPositions": data["squadAway"].get("startingPositions", []),
             },
         }
+
+    def _home_away_squad_ids(self, game_id: int) -> tuple[int, int]:
+        """Resolve home/away squad ids from cached matches JSON."""
+        matches_dir = self._data_dir() / "matches"
+        if not matches_dir.is_dir():
+            raise MissingDataError(f"Matches directory not found: {matches_dir}")
+        for path in sorted(matches_dir.glob("matches_*.json")):
+            with path.open(encoding="utf-8") as fh:
+                matches = json.load(fh)
+            for match in matches:
+                if int(match["id"]) == int(game_id):
+                    return int(match["homeSquadId"]), int(match["awaySquadId"])
+        raise MissingDataError(f"Match {game_id} not found in {matches_dir}")

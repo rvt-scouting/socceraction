@@ -1,4 +1,6 @@
+import json
 import os
+from pathlib import Path
 
 import pytest
 from socceraction.data.impect import ImpectLoader
@@ -68,3 +70,46 @@ def test_events(loader: ImpectLoader) -> None:
     ImpectEventSchema.validate(df)
     assert df.game_id.nunique() == 1
     assert df.game_id.iloc[0] == 122838
+
+
+def test_players_api_cached_lineup(tmp_path, data_dir: str) -> None:
+    """It loads players from pipeline-cached API lineup JSON (positions/substitutions)."""
+    game_id = 122838
+    open_lineup = json.loads(
+        (Path(data_dir) / "data" / "lineups" / f"lineups_{game_id}.json").read_text(encoding="utf-8")
+    )
+    # Simulate analytics-pipeline cache format from getStartingPositions / getSubstitutions
+    api_lineup = {
+        "positions": [
+            {
+                "playerId": p["id"],
+                "squadId": open_lineup["squadHome"]["id"],
+                "playerName": str(p["id"]),
+                "shirtNumber": p.get("shirtNumber", 0),
+            }
+            for p in open_lineup["squadHome"]["players"][:11]
+        ],
+        "substitutions": [],
+    }
+    lineup_dir = tmp_path / "data" / "lineups"
+    lineup_dir.mkdir(parents=True)
+    (lineup_dir / f"lineups_{game_id}.json").write_text(json.dumps(api_lineup), encoding="utf-8")
+    matches_dir = tmp_path / "data" / "matches"
+    matches_dir.mkdir(parents=True)
+    (matches_dir / "matches_743.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": game_id,
+                    "homeSquadId": open_lineup["squadHome"]["id"],
+                    "awaySquadId": open_lineup["squadAway"]["id"],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    api_loader = ImpectLoader(getter="local", root=str(tmp_path))
+    df = api_loader.players(game_id)
+    assert len(df) == 11
+    ImpectPlayerSchema.validate(df)
+    assert df["minutes_played"].sum() > 0
